@@ -1,0 +1,807 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>License Dashboard</title>
+    
+    <link rel="icon" type="image/png" href="https://cdn-icons-png.flaticon.com/512/2921/2921226.png">
+
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    
+    <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800;900&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
+
+    <style>
+        /* --- الأساسيات --- */
+        :root {
+            --primary-accent: #6366f1;
+            --secondary-accent: #8b5cf6;
+            --dark-text: #1e293b;
+            --light-text: #64748b;
+        }
+
+        body {
+            font-family: 'Tajawal', sans-serif;
+            background: linear-gradient(125deg, #f3f4f6, #eef2ff, #e0e7ff, #ede9fe);
+            background-size: 400% 400%;
+            animation: gradientBG 15s ease infinite;
+            color: var(--dark-text);
+            min-height: 100vh;
+            overflow-x: hidden;
+        }
+        @keyframes gradientBG { 0% { background-position: 0% 50%; } 50% { background-position: 100% 50%; } 100% { background-position: 0% 50%; } }
+
+        .glass { background: rgba(255, 255, 255, 0.7); backdrop-filter: blur(20px) saturate(180%); border-bottom: 1px solid rgba(255, 255, 255, 0.5); }
+        .glass-panel {
+            background: rgba(255, 255, 255, 0.65);
+            backdrop-filter: blur(25px) saturate(150%);
+            border: 1px solid rgba(255, 255, 255, 0.6);
+            box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.07);
+            border-radius: 20px;
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+        }
+        .glass-panel:hover { box-shadow: 0 12px 40px 0 rgba(31, 38, 135, 0.12); }
+
+        /* --- Table Headers (Sortable) --- */
+        th.sortable { cursor: pointer; transition: background 0.2s, color 0.2s; user-select: none; }
+        th.sortable:hover { background-color: rgba(99, 102, 241, 0.1); color: var(--primary-accent); }
+
+        /* --- Table Styling --- */
+        .full-width { width: 98%; margin: 0 auto; max-width: 1700px; }
+        table { width: 100%; table-layout: fixed; border-collapse: separate; border-spacing: 0 6px; }
+        
+        th { font-weight: 800; color: var(--light-text); font-size: 0.75rem; padding: 16px 8px; background-color: rgba(248, 250, 252, 0.5); border-bottom: 1px solid rgba(226, 232, 240, 0.6); white-space: normal; vertical-align: middle; }
+        
+        /* التعديل هنا: السماح بالتفاف النص (Wrap Text) */
+        td { 
+            vertical-align: middle; background: rgba(255, 255, 255, 0.5); min-height: 60px; font-size: 0.8rem; 
+            white-space: normal; word-wrap: break-word; padding: 8px 10px; transition: all 0.2s ease-in-out;
+            border-top: 1px solid rgba(255, 255, 255, 0.3); border-bottom: 1px solid rgba(255, 255, 255, 0.3); 
+            line-height: 1.4;
+        }
+
+        /* Hover Effect (Highlight Only) */
+        tbody tr:hover {
+            transform: scale(1.01);
+            background-color: #ffffff !important;
+            box-shadow: 0 10px 30px -5px rgba(0, 0, 0, 0.1);
+            z-index: 50; position: relative; border-radius: 8px;
+        }
+        tbody tr:hover td { background-color: #ffffff; border-color: transparent; }
+        tbody tr:hover td:first-child { border-top-right-radius: 8px; border-bottom-right-radius: 8px; }
+        tbody tr:hover td:last-child { border-top-left-radius: 8px; border-bottom-left-radius: 8px; }
+
+        /* --- COLUMN WIDTHS (تم ضبط العرض ليناسب النص الملفوف) --- */
+        @media (min-width: 768px) {
+            .w-check { width: 3%; text-align: center; }
+            .w-id { width: 4.5%; font-weight: bold; color: #94a3b8; }
+            .w-code { width: 9%; font-family: 'IBM Plex Mono', monospace; font-weight: 600; }
+            .w-entity { width: 14%; font-weight: 700; }
+            .w-type { width: 8%; }
+            .w-desc { width: 16%; color: var(--light-text); }
+            .w-loc { width: 4%; text-align: center; }
+            .w-dur { width: 4%; text-align: center; }
+            .w-date { width: 9.5%; font-family: 'IBM Plex Mono', monospace; direction: ltr; text-align: right; font-weight: 500; letter-spacing: -0.5px; }
+            .w-stat-num { width: 5%; text-align: center; font-weight: bold; } 
+            .w-stat-badge { width: 11%; text-align: center; } 
+            .w-renew { width: 8%; text-align: center; font-weight: bold; }
+            .w-act { width: 5%; text-align: center; }
+        }
+
+        /* --- BADGES --- */
+        .status-badge { 
+            padding: 6px 4px; border-radius: 8px; font-weight: 800; font-size: 0.7rem; color: white; 
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1); white-space: nowrap; width: 100%; display: flex; justify-content: center; align-items: center;
+        }
+        .badge-active { background: linear-gradient(135deg, #34d399, #059669); }
+        .badge-expired { background: linear-gradient(135deg, #fb7185, #e11d48); }
+        .badge-warning { background: linear-gradient(135deg, #fbbf24, #d97706); }
+
+        /* Renewal Colors */
+        .renew-stopped { color: #be123c; background-color: #ffe4e6; padding: 6px 10px; border-radius: 8px; display: inline-block; width: 100%; }
+        .renew-waiting { color: #b45309; background-color: #fef3c7; padding: 6px 10px; border-radius: 8px; display: inline-block; width: 100%; }
+        .renew-renewed { color: #1d4ed8; background-color: #dbeafe; padding: 6px 10px; border-radius: 8px; display: inline-block; width: 100%; }
+        .renew-active { color: #15803d; background-color: #dcfce7; padding: 6px 10px; border-radius: 8px; display: inline-block; width: 100%; }
+
+        /* KPIs & Tooltips */
+        .kpi-card { position: relative; overflow: visible; border-radius: 20px; transition: all 0.4s; border: 1px solid rgba(255,255,255,0.5); z-index: 1; }
+        .kpi-card:hover { transform: translateY(-5px); z-index: 50; }
+        .kpi-list { opacity: 0; visibility: hidden; position: absolute; top: 100%; left: 0; width: 100%; max-height: 220px; overflow-y: auto; background: rgba(255, 255, 255, 0.98); border: 1px solid rgba(226, 232, 240, 0.8); border-radius: 0 0 16px 16px; box-shadow: 0 20px 40px -5px rgba(0,0,0,0.15); transform: translateY(-10px); transition: all 0.3s; z-index: 100; }
+        .kpi-card:hover .kpi-list { opacity: 1; visibility: visible; transform: translateY(5px); }
+        .kpi-list-header { padding: 8px 12px; font-size: 0.7rem; font-weight: 800; background: #f1f5f9; border-bottom: 1px solid #e2e8f0; display: flex; justify-content: space-between; position: sticky; top: 0; }
+        .kpi-list-item { padding: 8px 12px; font-size: 0.75rem; border-bottom: 1px solid #f1f5f9; display: flex; justify-content: space-between; transition: background 0.1s; }
+        .kpi-list-item:hover { background: #f8fafc; color: var(--primary-accent); }
+        
+        .kpi-blue { background: linear-gradient(145deg, rgba(239,246,255,0.9), rgba(219,234,254,0.95)); color: #1e40af; }
+        .kpi-green { background: linear-gradient(145deg, rgba(240,253,244,0.9), rgba(220,252,231,0.95)); color: #166534; }
+        .kpi-amber { background: linear-gradient(145deg, rgba(255,251,235,0.9), rgba(254,243,199,0.95)); color: #92400e; }
+        .kpi-rose { background: linear-gradient(145deg, rgba(255,241,242,0.9), rgba(255,228,230,0.95)); color: #9f1239; }
+
+        /* Action Menu */
+        .action-cell { overflow: visible !important; position: relative; z-index: 1; }
+        .action-menu { display: none; position: absolute; background: rgba(255, 255, 255, 0.98); backdrop-filter: blur(25px); border: 1px solid rgba(99, 102, 241, 0.2); border-radius: 12px; box-shadow: 0 15px 35px -5px rgba(0, 0, 0, 0.2); width: 140px; z-index: 9999 !important; top: 45px; left: 50%; transform: translateX(-50%); padding: 6px; }
+        .action-menu.active { display: block; animation: menuPopup 0.2s cubic-bezier(0.34, 1.56, 0.64, 1); }
+        @keyframes menuPopup { from { opacity: 0; transform: translate(-50%, -10px) scale(0.9); } to { opacity: 1; transform: translate(-50%, 0) scale(1); } }
+        .action-item { display: flex; align-items: center; gap: 10px; padding: 10px 12px; width: 100%; text-align: right; font-size: 0.75rem; font-weight: 700; color: var(--light-text); transition: all 0.2s; border-radius: 8px; cursor: pointer; }
+        .action-item:hover { background-color: rgba(99, 102, 241, 0.1); color: var(--primary-accent); }
+        .action-item.delete:hover { background-color: rgba(244, 63, 94, 0.1); color: var(--danger); }
+
+        /* Toast */
+        #toast-container { position: fixed; top: 20px; left: 50%; transform: translateX(-50%); z-index: 10000; display: flex; flex-direction: column; gap: 10px; pointer-events: none; }
+        .toast { background: rgba(255, 255, 255, 0.95); backdrop-filter: blur(10px); padding: 12px 24px; border-radius: 50px; box-shadow: 0 10px 30px -5px rgba(0,0,0,0.15); border: 1px solid rgba(255,255,255,0.8); display: flex; align-items: center; gap: 10px; font-weight: 700; font-size: 0.8rem; animation: toastSlide 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275); pointer-events: auto; min-width: 250px; justify-content: center; }
+        .toast.success { color: var(--primary-accent); border-color: var(--primary-accent); }
+        .toast.error { color: var(--danger); border-color: var(--danger); }
+        @keyframes toastSlide { from { transform: translateY(-50px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+
+        /* Inputs & Others */
+        .interactive-icon:hover { transform: scale(1.15); filter: drop-shadow(0 0 8px rgba(99, 102, 241, 0.4)); color: var(--primary-accent); }
+        .btn-primary { background: linear-gradient(135deg, var(--primary-accent) 0%, var(--secondary-accent) 100%); color: white; box-shadow: 0 8px 20px -6px rgba(99, 102, 241, 0.5); transition: all 0.3s; border: 1px solid rgba(255,255,255,0.2); }
+        .btn-primary:hover { transform: translateY(-2px); box-shadow: 0 12px 25px -8px rgba(99, 102, 241, 0.6); }
+        .input-field { transition: all 0.3s; border: 1px solid rgba(226, 232, 240, 0.8); background: rgba(255, 255, 255, 0.6); backdrop-filter: blur(10px); box-shadow: inset 0 2px 4px rgba(0,0,0,0.02); }
+        .input-field:focus { border-color: var(--primary-accent); box-shadow: 0 0 0 4px rgba(99, 102, 241, 0.15); background: rgba(255, 255, 255, 0.9); outline: none; }
+        
+        /* 2. تعديل شاشة التحميل لإضافة النص الكبير والمؤثرات */
+        #main-loader { 
+            position: fixed; inset: 0; 
+            background: rgba(243, 244, 246, 0.96); 
+            backdrop-filter: blur(20px); 
+            z-index: 9999; 
+            display: flex; 
+            flex-direction: column; 
+            justify-content: center; 
+            align-items: center; 
+            gap: 40px;
+        }
+        .spinner { width: 60px; height: 60px; border: 5px solid rgba(99, 102, 241, 0.2); border-top-color: var(--primary-accent); border-radius: 50%; animation: spin 0.8s linear infinite; }
+        
+        /* تنسيق النص الجديد في شاشة التحميل - كبير وفايبرنت */
+        .loader-text {
+            font-weight: 900; 
+            font-size: 3.5rem; /* حجم كبير جداً */
+            line-height: 1.4;
+            text-align: center;
+            max-width: 90%;
+            
+            /* تدرج لوني قوي وزجاجي */
+            background: linear-gradient(135deg, #4f46e5 0%, #d946ef 50%, #4f46e5 100%);
+            background-size: 200% auto;
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            
+            /* تأثير اللمعان والظل */
+            filter: drop-shadow(0 4px 10px rgba(99, 102, 241, 0.3));
+            animation: shine 3s linear infinite;
+        }
+
+        /* أنيميشن اللمعان للنص */
+        @keyframes shine {
+            to { background-position: 200% center; }
+        }
+
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .animate-enter { animation: fadeInUp 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards; opacity: 0; transform: translateY(20px); }
+        @keyframes fadeInUp { to { opacity: 1; transform: translateY(0); } }
+
+        @media (max-width: 768px) { table { table-layout: auto; border-spacing: 0; } td { height: 50px; } .desktop-only { display: none; } .w-code { width: 25%; } .w-entity { width: 30%; font-weight: 700; } .w-desc { width: 30%; } .w-loc { width: 15%; } 
+            .loader-text { font-size: 2rem; }
+        }
+        .iphone-scroll { -webkit-overflow-scrolling: touch; }
+    </style>
+</head>
+<body class="text-xs" lang="ar">
+
+    <div id="main-loader">
+        <div class="spinner"></div>
+        <div class="loader-text">مشروع تصميم وتنفيذ خطي طرد الفائض البحري</div>
+    </div>
+    
+    <div id="toast-container"></div>
+
+    <header class="glass sticky top-0 z-40 w-full shadow-sm/50">
+        <div class="full-width h-16 flex items-center justify-between px-4">
+            <div class="flex items-center gap-3 animate-enter">
+                <div class="bg-gradient-to-br from-indigo-500 to-violet-600 p-2.5 rounded-2xl shadow-lg shadow-indigo-500/30 interactive-icon">
+                    <i data-lucide="layout-dashboard" class="w-5 h-5 text-white"></i>
+                </div>
+                <div>
+                    <h1 class="text-lg font-black text-slate-800 tracking-wide hidden md:block bg-clip-text text-transparent bg-gradient-to-r from-slate-800 to-indigo-800" data-i18n="appTitle">لوحة المتابعة</h1>
+                    <h1 class="text-base font-bold text-slate-800 md:hidden">الرخص</h1>
+                </div>
+            </div>
+            <div class="flex items-center gap-3 animate-enter" style="animation-delay: 0.1s;">
+                <button onclick="requestNotifyPermission()" class="p-2.5 bg-white/50 hover:bg-white/80 text-indigo-500 rounded-xl border border-indigo-100/50 shadow-sm transition-all active:scale-95 interactive-icon"><i data-lucide="bell" class="w-5 h-5"></i></button>
+                <button onclick="toggleLanguage()" class="flex items-center gap-2 px-4 py-2 bg-white/50 hover:bg-white/80 text-slate-700 rounded-xl border border-slate-200/50 shadow-sm font-bold text-xs transition-all active:scale-95 interactive-icon">
+                    <i data-lucide="globe" class="w-4 h-4"></i><span id="langLabel">EN</span>
+                </button>
+                <button onclick="exportToExcel()" class="hidden md:flex items-center gap-2 px-4 py-2 bg-emerald-50/80 hover:bg-emerald-100 text-emerald-600 rounded-xl border border-emerald-100 font-bold shadow-sm transition-all active:scale-95 interactive-icon" title="تصدير للإكسل">
+                    <i data-lucide="file-spreadsheet" class="w-4 h-4"></i><span class="hidden lg:inline">Excel</span>
+                </button>
+                <button id="bulkDeleteBtn" onclick="deleteSelected()" class="hidden flex items-center gap-2 px-4 py-2 bg-rose-50/80 hover:bg-rose-100 text-rose-600 rounded-xl border border-rose-100 font-bold shadow-sm transition-all active:scale-95 interactive-icon">
+                    <i data-lucide="trash-2" class="w-4 h-4"></i><span class="hidden md:inline" data-i18n="btnDeleteSelected">حذف المحدد</span>
+                </button>
+                <button onclick="openModal()" class="flex items-center gap-2 px-5 py-2.5 btn-primary rounded-xl font-bold shadow-lg shadow-indigo-500/20 transition-all active:scale-95">
+                    <i data-lucide="plus-circle" class="w-5 h-5"></i><span class="hidden md:inline" data-i18n="btnAddLicense">إضافة رخصة</span>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <main class="full-width py-8 space-y-8">
+        <div class="grid grid-cols-2 md:grid-cols-2 lg:grid-cols-4 gap-5" id="kpi-container"></div>
+        
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 animate-enter" style="animation-delay: 0.3s;">
+            <div class="lg:col-span-2 glass-panel p-6 h-80 flex flex-col relative overflow-hidden">
+                <div class="absolute top-0 right-0 w-32 h-32 bg-indigo-500/5 rounded-full blur-3xl -z-10"></div>
+                <div class="flex justify-between items-center mb-5">
+                    <h3 class="text-sm font-bold text-slate-700 flex items-center gap-2">
+                        <div class="p-1.5 bg-indigo-100/50 rounded-lg"><i data-lucide="bar-chart-3" class="w-4 h-4 text-indigo-600"></i></div>
+                        <span data-i18n="chartEntity">توزيع الجهات</span>
+                    </h3>
+                </div>
+                <div class="relative flex-1 w-full"><canvas id="entityChart"></canvas></div>
+            </div>
+            
+            <div class="glass-panel p-6 h-80 flex flex-col relative overflow-hidden">
+                <div class="absolute bottom-0 left-0 w-32 h-32 bg-emerald-500/5 rounded-full blur-3xl -z-10"></div>
+                <div class="flex justify-between items-center mb-2">
+                    <h3 class="text-sm font-bold text-slate-700 flex items-center gap-2">
+                        <div class="p-1.5 bg-emerald-100/50 rounded-lg"><i data-lucide="pie-chart" class="w-4 h-4 text-emerald-600"></i></div>
+                        <span data-i18n="chartStatus">نظرة عامة</span>
+                    </h3>
+                </div>
+                <div class="relative flex-1 w-full flex justify-center items-center"><canvas id="statusChart" style="max-height: 220px;"></canvas></div>
+            </div>
+        </div>
+
+        <div class="glass-panel overflow-hidden animate-enter" style="animation-delay: 0.4s;">
+            <div class="p-5 border-b border-slate-100/50 flex flex-col md:flex-row justify-between items-center bg-white/30 gap-4">
+                <h3 class="text-base font-bold text-slate-800 flex items-center gap-3">
+                    <div class="p-2 bg-slate-200/50 rounded-xl shadow-inner"><i data-lucide="list-filter" class="w-5 h-5 text-slate-600"></i></div>
+                    <span data-i18n="tableTitle">سجل التراخيص والمشاريع</span>
+                </h3>
+                <div class="flex gap-3 w-full md:w-auto">
+                    <div class="relative w-full md:w-64 group">
+                        <i data-lucide="search" class="absolute top-2.5 right-3 w-4 h-4 text-slate-400 group-hover:text-indigo-500 transition-colors ltr:right-auto ltr:left-3"></i>
+                        <input type="text" id="searchInput" placeholder="بحث في السجل..." class="input-field pl-4 pr-10 py-2.5 rounded-xl text-xs w-full ltr:pl-10 ltr:pr-4 font-medium">
+                    </div>
+                    <select id="statusFilter" class="input-field px-4 py-2.5 rounded-xl text-xs bg-white/80 cursor-pointer min-w-[120px] font-bold text-slate-600">
+                        <option value="all" data-i18n="filterAll">عرض الكل</option>
+                        <option value="active" data-i18n="filterActive">🟢 سارية</option>
+                        <option value="warning" data-i18n="filterWarning">🟡 تحذير</option>
+                        <option value="expired" data-i18n="filterExpired">🔴 منتهية</option>
+                    </select>
+                </div>
+            </div>
+            
+            <div class="w-full overflow-x-auto min-h-[400px] iphone-scroll p-2">
+                <table class="text-right text-xs ltr:text-left w-full" id="licensesTable">
+                    <thead>
+                        <tr>
+                            <th class="w-check text-center desktop-only rounded-r-xl"><input type="checkbox" id="selectAll" onchange="toggleSelectAll()" class="custom-checkbox scale-110"></th>
+                            <th class="w-id desktop-only sortable" data-i18n="thID" onclick="sortTable(1)">الرقم ↕</th>
+                            <th class="w-code" data-i18n="thCode">الكود</th>
+                            <th class="w-entity sortable" data-i18n="thEntity" onclick="sortTable(3)">الجهة ↕</th>
+                            <th class="w-type desktop-only" data-i18n="thType">النوع</th>
+                            <th class="w-desc" data-i18n="thDesc">الوصف</th>
+                            <th class="w-loc text-center" data-i18n="thLocation">الموقع</th>
+                            <th class="w-dur text-center desktop-only" data-i18n="thDuration">المدة</th>
+                            <th class="w-date desktop-only sortable" data-i18n="thStart" onclick="sortTable(8)">البدء ↕</th>
+                            <th class="w-date desktop-only sortable" data-i18n="thEnd" onclick="sortTable(9)">الانتهاء ↕</th>
+                            <th class="w-stat-num text-center desktop-only sortable" data-i18n="thRemaining" onclick="sortTable(10)">متبقي ↕</th>
+                            <th class="w-stat-badge text-center desktop-only" data-i18n="thStatus">الحالة</th>
+                            <th class="w-renew text-center desktop-only" data-i18n="thRenewal">تجديد</th>
+                            <th class="w-act text-center rounded-l-xl" data-i18n="thActions">إجراء</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tableBody" class="divide-y divide-slate-100/50 bg-white/10 space-y-2"></tbody>
+                </table>
+            </div>
+            <div class="px-6 py-4 border-t border-slate-100/50 text-[11px] text-slate-500 font-medium flex justify-between items-center bg-slate-50/30" id="tableFooter"></div>
+        </div>
+    </main>
+
+    <div id="licenseModal" class="relative z-50 hidden">
+        <div class="fixed inset-0 bg-slate-900/60 backdrop-blur-md transition-opacity" onclick="closeModal()"></div>
+        <div class="fixed inset-0 z-10 overflow-y-auto">
+            <div class="flex min-h-full items-center justify-center p-4">
+                <div class="relative transform overflow-hidden rounded-3xl glass-panel text-right shadow-2xl transition-all w-full max-w-lg border-0 ltr:text-left animate-enter">
+                    <div class="bg-white/50 px-6 py-4 border-b border-slate-100/50 flex justify-between items-center">
+                        <h3 class="text-lg font-black text-slate-800 bg-clip-text text-transparent bg-gradient-to-r from-indigo-600 to-violet-600" id="modalTitle" data-i18n="modalAdd">بيانات الرخصة</h3>
+                        <button onclick="closeModal()" class="text-slate-400 hover:text-rose-500 p-1.5 bg-white/60 rounded-full border border-slate-200/50 shadow-sm transition-all hover:rotate-90"><i data-lucide="x" class="w-5 h-5"></i></button>
+                    </div>
+                    <form id="licenseForm" class="p-6 space-y-5 bg-white/20">
+                        <input type="hidden" id="editIndex">
+                        <input type="hidden" id="existingFileUrl">
+                        <div class="bg-indigo-50/40 p-4 rounded-2xl border-2 border-indigo-200/50 border-dashed text-center group hover:bg-indigo-50/70 transition-colors cursor-pointer">
+                            <div class="mb-2 text-indigo-500 group-hover:scale-110 transition-transform"><i data-lucide="upload-cloud" class="w-8 h-8 mx-auto"></i></div>
+                            <label class="block text-xs font-bold text-indigo-700 mb-2 cursor-pointer">اسحب الملف هنا أو اضغط للرفع (PDF/صورة)</label>
+                            <input type="file" id="inputFile" class="block w-full text-xs text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-bold file:bg-indigo-100 file:text-indigo-700 hover:file:bg-indigo-200 cursor-pointer mx-auto">
+                        </div>
+                        <div class="grid grid-cols-2 gap-4">
+                            <div><label class="block text-[11px] font-bold text-slate-600 mb-1.5">الرقم</label><input type="text" id="inputNumber" required class="input-field w-full p-2.5 rounded-xl text-xs font-bold"></div>
+                            <div><label class="block text-[11px] font-bold text-slate-600 mb-1.5">الكود</label><input type="text" id="inputCode" required class="input-field w-full p-2.5 rounded-xl text-xs dir-ltr font-mono font-black tracking-wider"></div>
+                        </div>
+                        <div class="grid grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-[11px] font-bold text-slate-600 mb-1.5">الجهة</label>
+                                <select id="inputEntity" onchange="handleNewInput(this, 'newEntityDiv')" class="input-field w-full p-2.5 rounded-xl text-xs font-medium cursor-pointer"><option value="">-- اختر --</option><option value="ADD_NEW" class="font-bold text-indigo-600">+ إضافة جديدة</option></select>
+                                <div id="newEntityDiv" class="hidden mt-2 animate-enter"><input type="text" id="newEntityInput" class="input-field w-full p-2.5 rounded-xl text-xs" placeholder="اسم الجهة الجديد"></div>
+                            </div>
+                            <div>
+                                <label class="block text-[11px] font-bold text-slate-600 mb-1.5">النوع</label>
+                                <select id="inputType" onchange="handleNewInput(this, 'newTypeDiv')" class="input-field w-full p-2.5 rounded-xl text-xs font-medium cursor-pointer"><option value="">-- اختر --</option><option value="ADD_NEW" class="font-bold text-indigo-600">+ إضافة جديد</option></select>
+                                <div id="newTypeDiv" class="hidden mt-2 animate-enter"><input type="text" id="newTypeInput" class="input-field w-full p-2.5 rounded-xl text-xs" placeholder="أدخل النوع..."></div>
+                            </div>
+                        </div>
+                        <div><label class="block text-[11px] font-bold text-slate-600 mb-1.5">الوصف / الشارع</label><input type="text" id="inputDesc" class="input-field w-full p-2.5 rounded-xl text-xs"></div>
+                        <div class="bg-amber-50/50 p-3 rounded-xl border border-amber-200/50 flex items-center gap-3">
+                            <div class="p-2 bg-white/80 rounded-lg shadow-sm text-amber-500"><i data-lucide="bell-ring" class="w-5 h-5"></i></div>
+                            <div class="flex-1">
+                                <label class="block text-[11px] font-bold text-amber-800 mb-1">حالة التجديد التلقائي</label>
+                                <select id="inputRenewal" class="input-field w-full p-2 rounded-lg text-xs border-amber-200 text-amber-900 font-bold cursor-pointer">
+                                    <option value="تفعيل">🔔 تفعيل (تنبيه تلقائي)</option>
+                                    <option value="تم التجديد">✅ تم التجديد (إيقاف التنبيه)</option>
+                                    <option value="إيقاف">🛑 إيقاف</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div><label class="block text-[11px] font-bold text-slate-600 mb-1.5">رابط الموقع (GPS)</label><input type="url" id="inputLocation" class="input-field w-full p-2.5 rounded-xl text-xs dir-ltr text-blue-600 underline font-medium" placeholder="https://maps.google.com/..."></div>
+                        <div class="grid grid-cols-3 gap-3">
+                            <div><label class="block text-[11px] font-bold text-slate-600 mb-1.5">تاريخ البدء</label><input type="date" id="inputStart" onchange="calcDuration()" class="input-field w-full p-2.5 rounded-xl text-xs font-medium cursor-pointer"></div>
+                            <div><label class="block text-[11px] font-bold text-slate-600 mb-1.5">تاريخ الانتهاء</label><input type="date" id="inputEnd" onchange="calcDuration()" class="input-field w-full p-2.5 rounded-xl text-xs font-medium cursor-pointer"></div>
+                            <div><label class="block text-[11px] font-bold text-slate-400 mb-1.5">المدة (يوم)</label><input type="number" id="inputDuration" readonly class="input-field w-full p-2.5 rounded-xl text-xs bg-slate-100/80 text-center font-black text-slate-600"></div>
+                        </div>
+                        <div><label class="block text-[11px] font-bold text-slate-600 mb-1.5">ملاحظات إضافية</label><textarea id="inputNotes" rows="3" class="input-field w-full p-2.5 rounded-xl text-xs"></textarea></div>
+                    </form>
+                    <div class="bg-white/60 px-6 py-4 flex flex-row-reverse gap-3 border-t border-slate-100/50">
+                        <button onclick="saveLicense()" id="saveBtn" class="inline-flex justify-center items-center gap-2 rounded-xl btn-primary px-6 py-2.5 text-xs font-bold shadow-lg shadow-indigo-500/20 transition-all active:scale-95">
+                            <i data-lucide="save" class="w-4 h-4"></i> حفظ البيانات
+                        </button>
+                        <button onclick="closeModal()" class="inline-flex justify-center rounded-xl bg-white/80 px-5 py-2.5 text-xs font-bold text-slate-600 shadow-sm border border-slate-200/50 hover:bg-white transition-all active:scale-95">إلغاء</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzZVmx1BGq8WAlq26fYTK4umT-cglfoclNziruXbObKA4hO4BEuEvdRTp_KAOggoo2Kqg/exec';
+        
+        let licenseData = [];
+        let selectedIds = new Set();
+        let currentLang = 'ar';
+        let entityChartInstance = null;
+        let statusChartInstance = null;
+
+        const uiTranslations = {
+            ar: { appTitle: "لوحة المتابعة", btnDeleteSelected: "حذف المحدد", btnAddLicense: "إضافة رخصة", loading: "جاري التحميل...", chartEntity: "توزيع الجهات", chartStatus: "نظرة عامة", tableTitle: "سجل التراخيص", filterAll: "عرض الكل", filterActive: "🟢 سارية", filterWarning: "🟡 تحذير", filterExpired: "🔴 منتهية", thID: "الرقم", thCode: "الكود", thEntity: "الجهة", thType: "النوع", thDesc: "الوصف", thLocation: "موقع", thDuration: "مدة", thStart: "البدء", thEnd: "الانتهاء", thRemaining: "متبقي", thStatus: "الحالة", thRenewal: "تجديد", thNotes: "ملاحظات", thActions: "إجراء", modalAdd: "بيانات الرخصة", modalEdit: "تعديل", btnSave: "حفظ", btnCancel: "إلغاء", day: "يوم", kpiTotal: "إجمالي الرخص", kpiActive: "رخص سارية", kpiWarning: "تنبيه انتهاء", kpiExpired: "رخص منتهية", menuEdit: "تعديل", menuDup: "نسخ", menuDel: "حذف" },
+            en: { appTitle: "Dashboard", btnDeleteSelected: "Delete Selected", btnAddLicense: "Add License", loading: "Loading...", chartEntity: "Entities Dist.", chartStatus: "Status Overview", tableTitle: "License Registry", filterAll: "Show All", filterActive: "🟢 Active", filterWarning: "🟡 Warning", filterExpired: "🔴 Expired", thID: "ID", thCode: "Code", thEntity: "Entity", thType: "Type", thDesc: "Description", thLocation: "Loc", thDuration: "Dur", thStart: "Start", thEnd: "End", thRemaining: "Left", thStatus: "Status", thRenewal: "Renew", thNotes: "Notes", thActions: "Actions", modalAdd: "License Details", modalEdit: "Edit", btnSave: "Save", btnCancel: "Cancel", day: "d", kpiTotal: "Total Licenses", kpiActive: "Active", kpiWarning: "Expiring Soon", kpiExpired: "Expired", menuEdit: "Edit", menuDup: "Duplicate", menuDel: "Delete" }
+        };
+
+        const techDict = { 
+            "حي الصناعية - حي النابية": "Nabyia District - Industrial District",
+            "حي الصناعية": "Industrial District",
+            "حي النابية": "Nabyia District",
+            "وزارة الحرس الوطني": "Ministry of National Guard", "المؤسسة العامة لتحلية المياه المالحة": "Saline Water Conversion Corporation", "الشركة السعودية للكهرباء": "Saudi Electricity Company", "شركة الكهرباء": "Saudi Electricity Company", "بلدية القطيف": "Qatif Municipality", "بلدية البيضاء": "Al , Bayda Municipality", "المؤسسة العامة للري": "Public Irrigation Corporation", "إدارة السلامة المرورية بمحافظة القطيف": "Traffic Safety Department in Qatif Governorate", "أعمال حفر": "Excavation Works", "ثقب افقي": "Micro Tunnel", "ثقب أفقي": "Micro Tunnel", "نزح مياه جوفية": "Underground Water Dewatering", "نزح مياه": "Underground Water Dewatering", "نزح المياه": "Underground Water Dewatering", "كامل المسار": "Full Track", "طريق أبو حدرية الفرعي": "Abu Hadriya Branch Road", "طريق سيدنا عمر بن الخطاب": "The road of our master Omar bin Al-Khattab", "غرفة الغسيل": "Washout Chamber", "Laundry room": "Washout Chamber", "بعد الثقب الافقي": "After the Horizontal Hole", "ابو الخير السخاوي": "Abu Al-Khair Al-Sakhawi", "ابو الفضل البيهقي": "Abu Al-Fadl Al-Bayhaqi", "شارع عبد الرحمن بن الأرقم": "Abdul Rahman Bin Al-Arqam Street", "عبد الرحمن بن الأرقم": "Abd Alrahman Ibn Al Arqam", "الاختبار": "Hydro Test", "شارع الصناعية": "Industrial Street", "طريق الملك عبد العزيز": "King Abdulaziz Road", "بعد الدوار": "After the Roundabout", "شارع عبادة بن الصامت": "Ubadah Bin Al-Samit Street", "شارع خبيب بن عدي": "Khubaib Bin Uday Street", "جنادة الازدي": "Janada Al-Azdi", "مقابل الملعب": "In front of the stadium", "حديقة الحيوان": "Zoo", "النسيم": "Naseem", "الطف": "Latif", "طريق المزارع": "Al Mazaree Road", "طريق الظهران الجبيل": "Dhahran Jubail Road", "بجوار": "Next to", "تصريف مياه الامطار": "Rainwater Drainage", "شارع الغدير": "Al Ghadeer Street", "الكورنيش": "Corniche", "النابية": "Nabyia", "الأكواع": "Elbows", "شارع": "Street", "إيقاف": "Stopped", "تفعيل": "Active", "منتظر": "Waiting", "تم التجديد": "Renewed", "حي الصناعية - حي النابية": "Nabyia District - Industrial District" 
+        };
+
+        function translateText(text) {
+            if (currentLang === 'ar' || !text) return text;
+            let val = String(text).trim();
+            if (techDict[val]) return techDict[val];
+            for (let key in techDict) { if (val.includes(key)) val = val.replace(new RegExp(key, "g"), techDict[key]); }
+            return val;
+        }
+
+        async function fetchLicenses() {
+            try {
+                const res = await fetch(`${APPS_SCRIPT_URL}?v=${Date.now()}`);
+                if (!res.ok) throw new Error("HTTP error " + res.status);
+                licenseData = await res.json();
+                document.getElementById('main-loader').style.display = 'none';
+                populateDropdowns();
+                renderAll();
+                checkDesktopNotifications();
+            } catch (e) { 
+                document.getElementById('tableBody').innerHTML = `<tr><td colspan="15" class="text-center py-8 text-rose-500 font-bold dir-ltr">${e.message}</td></tr>`; 
+                document.getElementById('main-loader').style.display = 'none';
+            }
+        }
+
+        function parseDateSafe(dateInput) {
+            if (!dateInput) return null;
+            if (dateInput instanceof Date) return dateInput;
+            let s = String(dateInput);
+            if(s.includes('T')) {
+                let d = new Date(s);
+                d.setHours(d.getHours() + 12);
+                return d;
+            }
+            let parts = s.split(/[-/]/);
+            if (parts.length === 3) {
+                 if (parts[0].length === 4) return new Date(parts[0], parts[1]-1, parts[2], 12, 0, 0);
+            }
+            return new Date(s);
+        }
+
+        function formatDisplayDate(dateStr) { 
+            const date = parseDateSafe(dateStr);
+            if (!date || isNaN(date.getTime())) return "-";
+            const day = String(date.getDate()).padStart(2, '0');
+            const month = date.toLocaleString('en-US', { month: 'short' }).toUpperCase();
+            const year = date.getFullYear();
+            return `${day} ${month} ${year}`;
+        }
+        
+        function toInputDate(d) {
+            if(!d || isNaN(d.getTime())) return "";
+            const y = d.getFullYear();
+            const m = String(d.getMonth() + 1).padStart(2, '0');
+            const day = String(d.getDate()).padStart(2, '0');
+            return `${y}-${m}-${day}`;
+        }
+
+        function showToast(message, type = 'success') {
+            const container = document.getElementById('toast-container');
+            const toast = document.createElement('div');
+            toast.className = `toast ${type}`;
+            toast.innerHTML = type === 'success' ? `<i data-lucide="check-circle" class="w-5 h-5"></i>` : `<i data-lucide="alert-triangle" class="w-5 h-5"></i>`;
+            toast.innerHTML += `<span>${message}</span>`;
+            container.appendChild(toast);
+            lucide.createIcons();
+            setTimeout(() => { toast.style.opacity = '0'; toast.style.transform = 'translateY(-20px)'; setTimeout(() => toast.remove(), 300); }, 3000);
+        }
+
+        function sortTable(n) {
+            const table = document.getElementById("licensesTable");
+            let rows, switching, i, x, y, shouldSwitch, dir, switchcount = 0;
+            switching = true; dir = "asc"; 
+            while (switching) {
+                switching = false; rows = table.rows;
+                for (i = 1; i < (rows.length - 1); i++) {
+                    shouldSwitch = false;
+                    x = rows[i].getElementsByTagName("TD")[n];
+                    y = rows[i + 1].getElementsByTagName("TD")[n];
+                    if (dir == "asc") { if (x.innerHTML.toLowerCase() > y.innerHTML.toLowerCase()) { shouldSwitch = true; break; } } 
+                    else if (dir == "desc") { if (x.innerHTML.toLowerCase() < y.innerHTML.toLowerCase()) { shouldSwitch = true; break; } }
+                }
+                if (shouldSwitch) { rows[i].parentNode.insertBefore(rows[i + 1], rows[i]); switching = true; switchcount++; } 
+                else { if (switchcount == 0 && dir == "asc") { dir = "desc"; switching = true; } }
+            }
+        }
+
+        function exportToExcel() {
+            const table = document.getElementById("licensesTable");
+            const wb = XLSX.utils.table_to_book(table, {sheet: "Licenses"});
+            XLSX.writeFile(wb, "Licenses_Data.xlsx");
+        }
+
+        function toggleMenu(id) {
+            document.querySelectorAll('.action-menu').forEach(menu => {
+                if (menu.id !== `menu-${id}`) menu.classList.remove('active');
+            });
+            const menu = document.getElementById(`menu-${id}`);
+            if (menu) menu.classList.toggle('active');
+        }
+
+        window.onclick = function(event) {
+            if (!event.target.closest('.action-cell')) {
+                document.querySelectorAll('.action-menu').forEach(menu => menu.classList.remove('active'));
+            }
+        }
+
+        function getRenewalClass(status) {
+            if (status === 'تم التجديد' || status === 'Renewed') return 'renew-renewed';
+            if (status === 'إيقاف' || status === 'Stopped') return 'renew-stopped';
+            if (status === 'في انتظار التجديد' || status === 'Waiting Renewal') return 'renew-waiting';
+            return 'renew-active';
+        }
+
+        function renderAll() {
+            const search = document.getElementById('searchInput').value.toLowerCase();
+            const filter = document.getElementById('statusFilter').value;
+            const tbody = document.getElementById('tableBody');
+            
+            const today = new Date();
+            today.setHours(0,0,0,0);
+
+            const processed = licenseData.map(item => {
+                const endDate = parseDateSafe(item['تاريخ الانتهاء']);
+                let diff = 0;
+                let status = "سارية";
+                
+                if (endDate) {
+                    const endD = new Date(endDate);
+                    endD.setHours(0,0,0,0);
+                    diff = Math.round((endD - today) / 86400000);
+                    status = diff < 0 ? "منتهية" : diff <= 14 ? "شارفت على الانتهاء" : "سارية";
+                } else { status = "غير محدد"; }
+                
+                return { ...item, diff, status };
+            });
+
+            const filtered = processed.filter(item => {
+                const searchStr = `${item['الرقم']} ${item['الكود']} ${item['الجهة']} ${item['نوع الرخصة']} ${item.desc_ar}`.toLowerCase();
+                const statusCode = item.status === 'منتهية' ? 'expired' : item.status === 'شارفت على الانتهاء' ? 'warning' : 'active';
+                return searchStr.includes(search) && (filter === 'all' || statusCode === filter);
+            });
+
+            renderKPIs(processed); 
+            
+            tbody.innerHTML = filtered.map((row, index) => {
+                const entity = translateText(currentLang === 'en' ? (row.entity_en || row['الجهة']) : row['الجهة']);
+                const type = translateText(currentLang === 'en' ? (row.type_en || row['نوع الرخصة']) : row['نوع الرخصة']);
+                const desc = translateText(currentLang === 'en' ? (row.desc_en || row.desc_ar) : row.desc_ar);
+                const notes = translateText(currentLang === 'en' ? (row.notes_en || row['ملاحظات']) : row['ملاحظات']);
+                
+                let statusTxt = currentLang === 'en' ? (row.diff < 0 ? "Expired" : row.diff <= 14 ? "Warning" : "Active") : row.status;
+                
+                let dbRenewal = row['renewal_status'];
+                let renewalDisplay;
+                
+                if (dbRenewal === "إيقاف" || dbRenewal === "Stopped") {
+                    renewalDisplay = currentLang === 'en' ? "Stopped" : "إيقاف";
+                } else if (dbRenewal === "تم التجديد" || dbRenewal === "Renewed") {
+                    renewalDisplay = currentLang === 'en' ? "Renewed" : "تم التجديد";
+                } else {
+                    if (row.diff < 0) {
+                        renewalDisplay = currentLang === 'en' ? "Stopped" : "إيقاف";
+                    } else if (row.diff <= 14) {
+                        renewalDisplay = currentLang === 'en' ? "Waiting Renewal" : "في انتظار التجديد";
+                    } else {
+                        renewalDisplay = currentLang === 'en' ? "Renewed" : "تم التجديد";
+                    }
+                }
+                
+                const renewalClass = getRenewalClass(currentLang === 'en' ? (renewalDisplay === "Stopped" ? "Stopped" : renewalDisplay === "Waiting Renewal" ? "Waiting Renewal" : "Renewed") : (renewalDisplay === "إيقاف" ? "إيقاف" : renewalDisplay === "في انتظار التجديد" ? "في انتظار التجديد" : "تم التجديد"));
+                
+                let displayCode = row['الكود'];
+                const fUrl = row['file_url'];
+                if (fUrl && String(fUrl).startsWith('http')) {
+                    displayCode = `<a href="${fUrl}" target="_blank" class="flex items-center gap-1.5 text-indigo-600 font-black hover:text-indigo-800 transition-colors interactive-icon" title="فتح الملف"><i data-lucide="paperclip" class="w-3.5 h-3.5"></i>${row['الكود']}</a>`;
+                }
+
+                const locHtml = (row['الموقع'] && String(row['الموقع']).startsWith('http')) ? `<a href="${row['الموقع']}" target="_blank" class="w-8 h-8 flex items-center justify-center rounded-full bg-emerald-50 text-emerald-600 hover:bg-emerald-500 hover:text-white transition-all mx-auto shadow-sm interactive-icon"><i data-lucide="map-pin" class="w-4 h-4"></i></a>` : '-';
+                
+                let statusBadgeClass = row.status === 'سارية' ? 'badge-active' : row.status === 'منتهية' ? 'badge-expired' : 'badge-warning';
+
+                return `
+                <tr class="group animate-enter" style="animation-delay: ${index * 0.03}s">
+                    <td class="w-check text-center desktop-only rounded-r-xl"><input type="checkbox" class="row-checkbox custom-checkbox cursor-pointer" value="${row['الرقم']}" onchange="checkRow(this)" ${selectedIds.has(String(row['الرقم'])) ? 'checked' : ''}></td>
+                    <td class="w-id desktop-only text-slate-400 group-hover:text-indigo-500 font-bold transition-colors">${row['الرقم']}</td>
+                    <td class="w-code text-right font-mono font-bold ltr:text-left">${displayCode}</td>
+                    <td class="w-entity text-slate-700" title="${entity}">${entity}</td>
+                    <td class="w-type text-slate-600 desktop-only" title="${type}">${type}</td>
+                    <td class="w-desc text-slate-500" title="${desc}">${desc || '-'}</td>
+                    <td class="w-loc text-center">${locHtml}</td>
+                    <td class="w-dur text-center font-bold text-slate-600 desktop-only"><span class="bg-slate-100/80 px-2 py-1 rounded-lg">${row['مدة الرخصة']}</span></td>
+                    <td class="w-date desktop-only">${formatDisplayDate(row['تاريخ البدء'])}</td>
+                    <td class="w-date desktop-only">${formatDisplayDate(row['تاريخ الانتهاء'])}</td>
+                    <td class="w-stat-num font-black desktop-only ${row.diff < 0 ? 'text-rose-600' : 'text-emerald-600'}">${row.diff}</td>
+                    <td class="w-stat-badge desktop-only"><span class="status-badge ${statusBadgeClass}">${statusTxt}</span></td>
+                    <td class="w-renew text-center desktop-only"><span class="text-[10px] font-black ${renewalClass}">${renewalDisplay}</span></td>
+                    <td class="w-act text-center action-cell rounded-l-xl">
+                        <button onclick="toggleMenu('${row['الرقم']}')" class="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-full transition-all settings-gear"><i data-lucide="settings-2" class="w-4.5 h-4.5"></i></button>
+                        <div id="menu-${row['الرقم']}" class="action-menu">
+                            <div onclick="editLicense('${row['الرقم']}')" class="action-item"><i data-lucide="edit-3" class="w-4 h-4"></i> ${uiTranslations[currentLang].menuEdit}</div>
+                            <div onclick="duplicateLicense('${row['الرقم']}')" class="action-item"><i data-lucide="copy" class="w-4 h-4"></i> ${uiTranslations[currentLang].menuDup}</div>
+                            <div onclick="deleteSingle('${row['الرقم']}')" class="action-item delete"><i data-lucide="trash-2" class="w-4 h-4"></i> ${uiTranslations[currentLang].menuDel}</div>
+                        </div>
+                    </td>
+                </tr>`;
+            }).join('');
+            lucide.createIcons();
+            renderCharts(processed);
+            document.getElementById('tableFooter').innerHTML = `<span class="bg-indigo-50 text-indigo-600 px-2 py-1 rounded-lg">عدد السجلات: ${filtered.length}</span>`;
+        }
+
+        function animateValue(obj, start, end, duration) {
+            let startTimestamp = null;
+            const step = (timestamp) => {
+                if (!startTimestamp) startTimestamp = timestamp;
+                const progress = Math.min((timestamp - startTimestamp) / duration, 1);
+                obj.innerHTML = Math.floor(progress * (end - start) + start);
+                if (progress < 1) { window.requestAnimationFrame(step); }
+            };
+            window.requestAnimationFrame(step);
+        }
+
+        function renderCharts(data) { 
+            const ctxE = document.getElementById('entityChart').getContext('2d'); 
+            if (entityChartInstance) entityChartInstance.destroy(); 
+            const counts = {}; 
+            data.forEach(d => { let n = translateText(currentLang === 'en' ? (d.entity_en || d['الجهة']) : d['الجهة']); counts[n] = (counts[n] || 0) + 1; }); 
+            const sorted = Object.entries(counts).sort((a,b) => b[1] - a[1]).slice(0, 10); 
+            entityChartInstance = new Chart(ctxE, { 
+                type: 'bar', 
+                data: { labels: sorted.map(e => e[0]), datasets: [{ label: '', data: sorted.map(e => e[1]), backgroundColor: '#6366f1', borderRadius: 4, barPercentage: 0.3, hoverBackgroundColor: '#8b5cf6' }] }, 
+                options: { 
+                    responsive: true, maintainAspectRatio: false, indexAxis: 'x', 
+                    plugins: { legend: { display: false }, tooltip: { backgroundColor: 'rgba(0,0,0,0.8)', titleFont: { family: 'Tajawal' }, bodyFont: { family: 'Tajawal' } } },
+                    scales: { y: { grid: { display: false, drawBorder: false }, ticks: { font: { family: 'Tajawal' } } }, x: { grid: { display: false }, ticks: { font: { family: 'Tajawal', weight: 'bold' } } } }
+                } 
+            }); 
+
+            const ctxS = document.getElementById('statusChart').getContext('2d'); 
+            if (statusChartInstance) statusChartInstance.destroy(); 
+            const sCounts = [data.filter(d => d.status === "سارية").length, data.filter(d => d.status === "منتهية").length, data.filter(d => d.status === "شارفت على الانتهاء").length]; 
+            statusChartInstance = new Chart(ctxS, { 
+                type: 'doughnut', 
+                data: { labels: ["Active", "Expired", "Warning"], datasets: [{ data: sCounts, backgroundColor: ['#10b981', '#f43f5e', '#f59e0b'], borderWidth: 2, borderColor: '#ffffff', hoverOffset: 10 }] }, 
+                options: { 
+                    responsive: true, maintainAspectRatio: false, cutout: '50%', // 3. تعديل سمك الدوائر (cutout) من 80% إلى 50% لزيادة السمك
+                    plugins: { 
+                        legend: { 
+                            position: 'bottom', 
+                            labels: { 
+                                usePointStyle: true, boxWidth: 10, padding: 20, font: { family: 'Tajawal', weight: 'bold' },
+                                generateLabels: function(chart) {
+                                    const data = chart.data;
+                                    if (data.labels.length && data.datasets.length) {
+                                        return data.labels.map(function(label, i) {
+                                            const meta = chart.getDatasetMeta(0);
+                                            const style = meta.controller.getStyle(i);
+                                            const value = data.datasets[0].data[i];
+                                            return {
+                                                text: label + ': ' + value,
+                                                fillStyle: style.backgroundColor,
+                                                strokeStyle: style.borderColor,
+                                                lineWidth: style.borderWidth,
+                                                hidden: isNaN(data.datasets[0].data[i]) || meta.data[i].hidden,
+                                                index: i
+                                            };
+                                        });
+                                    }
+                                    return [];
+                                }
+                            } 
+                        } 
+                    } 
+                } 
+            }); 
+        }
+
+        function renderKPIs(data) { 
+            const total = data;
+            const active = data.filter(d => d.status === "سارية");
+            const warning = data.filter(d => d.status === "شارفت على الانتهاء");
+            const expired = data.filter(d => d.status === "منتهية");
+            const kpis = [
+                { title: uiTranslations[currentLang].kpiTotal, value: total.length, class: "kpi-blue", icon: "layers", list: total }, 
+                { title: uiTranslations[currentLang].kpiActive, value: active.length, class: "kpi-green", icon: "check-circle-2", list: active }, 
+                { title: uiTranslations[currentLang].kpiWarning, value: warning.length, class: "kpi-amber", icon: "alert-triangle", list: warning }, 
+                { title: uiTranslations[currentLang].kpiExpired, value: expired.length, class: "kpi-rose", icon: "x-octagon", list: expired }
+            ]; 
+            document.getElementById('kpi-container').innerHTML = kpis.map((k, i) => {
+                const listHTML = k.list.length > 0 ? k.list.map(item => `<div class="kpi-list-item"><span class="code">${item['الكود']}</span></div>`).join('') : '<div class="p-4 text-center text-gray-400 text-xs">لا يوجد بيانات</div>';
+                return `
+                <div class="kpi-card ${k.class} p-5 flex flex-col justify-between h-32 animate-enter" style="animation-delay: ${i * 0.1}s">
+                    <div class="flex justify-between items-start">
+                        <p class="text-[11px] font-black uppercase tracking-wider opacity-70">${k.title}</p>
+                        <div class="icon-box p-2 rounded-xl bg-white/40 backdrop-blur-sm"><i data-lucide="${k.icon}" class="w-5 h-5"></i></div>
+                    </div>
+                    <div><h2 class="text-4xl font-black mt-2 tracking-tight count-up" data-val="${k.value}">0</h2></div>
+                    <div class="kpi-list custom-scrollbar">
+                        <div class="kpi-list-header"><span>قائمة الأكواد</span><span>العدد: ${k.value}</span></div>
+                        <div class="kpi-list-content">${listHTML}</div>
+                    </div>
+                </div>`;
+            }).join(''); 
+            document.querySelectorAll('.count-up').forEach(el => { animateValue(el, 0, parseInt(el.getAttribute('data-val')), 1000); });
+            lucide.createIcons(); 
+        }
+
+        function toggleLanguage() { currentLang = currentLang === 'ar' ? 'en' : 'ar'; document.body.dir = currentLang === 'ar' ? 'rtl' : 'ltr'; document.getElementById('langLabel').textContent = currentLang === 'ar' ? 'EN' : 'عربي'; renderAll(); }
+        function openModal() { document.getElementById('editIndex').value = "-1"; document.getElementById('licenseForm').reset(); document.getElementById('newEntityDiv').classList.add('hidden'); document.getElementById('newTypeDiv').classList.add('hidden'); document.getElementById('licenseModal').classList.remove('hidden'); }
+        function closeModal() { document.getElementById('licenseModal').classList.add('hidden'); }
+        function calcDuration() { 
+            const s = document.getElementById('inputStart').value; 
+            const e = document.getElementById('inputEnd').value; 
+            const d1 = parseDateSafe(s); 
+            const d2 = parseDateSafe(e); 
+            if (d1 && d2) document.getElementById('inputDuration').value = Math.max(0, Math.ceil((d2 - d1) / 86400000)); 
+        }
+        function checkRow(cb) { if (cb.checked) selectedIds.add(cb.value); else selectedIds.delete(cb.value); updateBulkDeleteButton(); }
+        function toggleSelectAll() { const ch = document.getElementById('selectAll').checked; document.querySelectorAll('.row-checkbox').forEach(cb => { cb.checked = ch; if (ch) selectedIds.add(cb.value); else selectedIds.delete(cb.value); }); updateBulkDeleteButton(); }
+        function updateBulkDeleteButton() { const btn = document.getElementById('bulkDeleteBtn'); btn.classList.toggle('hidden', selectedIds.size === 0); }
+        function duplicateLicense(id) { const item = licenseData.find(i => String(i['الرقم']) === String(id)); if(!confirm('Duplicate?')) return; const newData = {...item, 'الرقم': Date.now().toString().slice(-5)}; licenseData.push(newData); renderAll(); fetch(APPS_SCRIPT_URL, { method: 'POST', body: JSON.stringify({ action: 'duplicate', row: newData }) }).then(()=>showToast('تم النسخ بنجاح')); }
+        function deleteSelected() { if(confirm('هل أنت متأكد من الحذف؟')) { const ids = Array.from(selectedIds); licenseData = licenseData.filter(i => !selectedIds.has(String(i['الرقم']))); renderAll(); fetch(APPS_SCRIPT_URL, { method: 'POST', body: JSON.stringify({ action: 'delete_multi', ids: ids }) }).then(()=>showToast('تم الحذف بنجاح')); selectedIds.clear(); updateBulkDeleteButton(); } }
+        function deleteSingle(id) { if(!confirm(uiTranslations[currentLang].msgConfirmDelete || 'حذف؟')) return; licenseData = licenseData.filter(i => String(i['الرقم']) !== String(id)); renderAll(); fetch(APPS_SCRIPT_URL, { method: 'POST', body: JSON.stringify({ action: 'delete', id }) }).then(()=>showToast('تم الحذف بنجاح')); }
+        function populateDropdowns() { const eSel = document.getElementById('inputEntity'), tSel = document.getElementById('inputType'); const reset = (sel) => { while(sel.options.length > 2) sel.remove(2); }; reset(eSel); reset(tSel); [...new Set(licenseData.map(i => i['الجهة']))].filter(Boolean).sort().forEach(e => eSel.add(new Option(e, e))); [...new Set(licenseData.map(i => i['نوع الرخصة']))].filter(Boolean).sort().forEach(t => tSel.add(new Option(t, t))); }
+        function handleNewInput(sel, divId) { document.getElementById(divId).classList.toggle('hidden', sel.value !== 'ADD_NEW'); }
+        function requestNotifyPermission() { if ("Notification" in window) Notification.requestPermission(); else alert("Not supported on this device"); }
+        function checkDesktopNotifications() { 
+            if ("Notification" in window && Notification.permission === "granted") { 
+                const today = new Date();
+                today.setHours(0,0,0,0);
+                licenseData.forEach(i => { 
+                    const d = parseDateSafe(i['تاريخ الانتهاء']); 
+                    if(d) {
+                        const dObj = new Date(d);
+                        dObj.setHours(0,0,0,0);
+                        const diff = Math.round((dObj - today) / 86400000);
+                        if (diff === 10 && i['renewal_status'] !== "تم التجديد") {
+                            new Notification("تنبيه انتهاء", { body: `رخصة رقم ${i['الرقم']} تنتهي خلال 10 أيام.` });
+                        }
+                    } 
+                }); 
+            } 
+        }
+
+        function editLicense(id) {
+            const item = licenseData.find(i => String(i['الرقم']) === String(id));
+            if (!item) return;
+            document.getElementById('editIndex').value = id;
+            document.getElementById('inputNumber').value = item['الرقم']; document.getElementById('inputCode').value = item['الكود'];
+            const eSel = document.getElementById('inputEntity'); if(![...eSel.options].some(o => o.value === item['الجهة'])) eSel.add(new Option(item['الجهة'], item['الجهة'])); eSel.value = item['الجهة'];
+            const tSel = document.getElementById('inputType'); if(![...tSel.options].some(o => o.value === item['نوع الرخصة'])) tSel.add(new Option(item['نوع الرخصة'], item['نوع الرخصة'])); tSel.value = item['نوع الرخصة'];
+            document.getElementById('inputDesc').value = item.desc_ar || ""; 
+            const dbStatus = item['renewal_status'];
+            const renInput = document.getElementById('inputRenewal');
+            if (dbStatus === 'إيقاف' || dbStatus === 'Stopped') renInput.value = 'إيقاف';
+            else if (dbStatus === 'تم التجديد' || dbStatus === 'Renewed') renInput.value = 'تم التجديد';
+            else renInput.value = 'تفعيل';
+            document.getElementById('existingFileUrl').value = item['file_url'] || "";
+            document.getElementById('inputLocation').value = item['الموقع']; 
+            const dStart = parseDateSafe(item['تاريخ البدء']);
+            const dEnd = parseDateSafe(item['تاريخ الانتهاء']);
+            if (dStart) document.getElementById('inputStart').value = toInputDate(dStart);
+            if (dEnd) document.getElementById('inputEnd').value = toInputDate(dEnd);
+            document.getElementById('inputNotes').value = item['ملاحظات']; calcDuration();
+            document.getElementById('licenseModal').classList.remove('hidden');
+        }
+
+        function saveLicense() {
+            const saveBtn = document.getElementById('saveBtn');
+            saveBtn.innerHTML = '<div class="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div> جاري الحفظ...'; saveBtn.disabled = true;
+            const id = document.getElementById('editIndex').value;
+            const fileInput = document.getElementById('inputFile');
+            const file = fileInput.files[0];
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                const base64Data = e.target.result.split(',')[1];
+                sendData(base64Data, file ? file.name : null, file ? file.type : null);
+            };
+            if (file) reader.readAsDataURL(file); else sendData(null, null, null);
+        }
+
+        function sendData(fileData, fileName, mimeType) {
+            const id = document.getElementById('editIndex').value;
+            const eSel = document.getElementById('inputEntity'), tSel = document.getElementById('inputType');
+            const entity = eSel.value === 'ADD_NEW' ? document.getElementById('newEntityInput').value : eSel.value;
+            const type = tSel.value === 'ADD_NEW' ? document.getElementById('newTypeInput').value : tSel.value;
+            const renewalVal = document.getElementById('inputRenewal').value;
+            const existingUrl = document.getElementById('existingFileUrl').value;
+            const rowData = { 
+                'الرقم': document.getElementById('inputNumber').value, 
+                'الكود': document.getElementById('inputCode').value, 
+                'الجهة': entity, 'نوع الرخصة': type, 
+                'الشارع – الوصف': document.getElementById('inputDesc').value, 
+                'حالة التجديد': renewalVal, 
+                'الموقع': document.getElementById('inputLocation').value, 
+                'مدة الرخصة': document.getElementById('inputDuration').value, 
+                'تاريخ البدء': document.getElementById('inputStart').value, 
+                'تاريخ الانتهاء': document.getElementById('inputEnd').value, 
+                'ملاحظات': document.getElementById('inputNotes').value,
+                'file_url_old': existingUrl
+            };
+            const payload = { action: id === "-1" ? 'add' : 'update', originalId: id, row: rowData, fileData: fileData, fileName: fileName, mimeType: mimeType };
+            fetch(APPS_SCRIPT_URL, { method: 'POST', body: JSON.stringify(payload) })
+            .then(() => { 
+                closeModal(); 
+                document.getElementById('saveBtn').innerHTML = '<i data-lucide="save" class="w-4 h-4"></i> حفظ البيانات'; document.getElementById('saveBtn').disabled = false;
+                showToast('تم الحفظ بنجاح');
+                fetchLicenses(); 
+            })
+            .catch(e => { showToast('حدث خطأ في الحفظ', 'error'); document.getElementById('saveBtn').disabled = false; });
+        }
+        
+        window.onload = fetchLicenses;
+        document.getElementById('searchInput').oninput = renderAll;
+        document.getElementById('statusFilter').onchange = renderAll;
+    </script>
+</body>
+</html>
